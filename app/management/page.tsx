@@ -6,18 +6,29 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { StatusBadge } from '@/components/shared/status-badge';
 import { ExportButton } from '@/components/shared/export-button';
+import { PropertyDetailPanel } from '@/components/shared/property-detail-panel';
+import { useFavorites } from '@/lib/hooks/use-favorites';
+import { usePipeline } from '@/lib/hooks/use-pipeline';
 import { fmt, fmtCurrency, fmtPercent } from '@/lib/format';
 import { Search, Building2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { AbbrCustom } from '@/components/shared/abbr';
 import { ContactQuality } from '@/components/shared/contact-quality';
+import type { Property } from '@/types/database';
 
 export default function ManagementPage() {
   const { companies, loading, search, setSearch } = useManagementSearch();
   const [selected, setSelected] = useState<string | null>(null);
   const { properties, loading: propsLoading } = useCompanyProperties(selected);
+  const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
+  const { favoriteIds, toggle: toggleFav } = useFavorites();
+  const { addToPipeline } = usePipeline();
 
   const selectedCompany = companies.find((c) => c.management_company === selected);
+
+  // Determine layout widths based on selection state
+  const hasProperty = !!selectedProperty;
+  const hasCompany = !!selected;
 
   return (
     <div className="space-y-4">
@@ -28,7 +39,7 @@ export default function ManagementPage() {
 
       <div className="flex gap-6">
         {/* Company List */}
-        <div className={`space-y-2 ${selected ? 'w-1/2 hidden lg:block' : 'w-full'}`}>
+        <div className={`space-y-2 ${hasCompany ? (hasProperty ? 'w-1/3 hidden lg:block' : 'w-1/2 hidden lg:block') : 'w-full'}`}>
           {loading ? (
             <div className="flex items-center justify-center h-32">
               <div className="animate-spin h-6 w-6 border-2 border-primary border-t-transparent rounded-full" />
@@ -40,7 +51,10 @@ export default function ManagementPage() {
               <Card
                 key={c.management_company}
                 className={`cursor-pointer transition-colors hover:bg-accent/50 ${selected === c.management_company ? 'ring-2 ring-primary' : ''}`}
-                onClick={() => setSelected(c.management_company)}
+                onClick={() => {
+                  setSelected(c.management_company);
+                  setSelectedProperty(null);
+                }}
               >
                 <CardContent className="flex items-center justify-between p-4">
                   <div className="flex items-center gap-3 min-w-0">
@@ -65,13 +79,13 @@ export default function ManagementPage() {
 
         {/* Company Detail */}
         {selected && (
-          <div className="w-full lg:w-1/2 space-y-4">
+          <div className={`space-y-4 ${hasProperty ? 'w-full lg:w-1/3' : 'w-full lg:w-1/2'}`}>
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-3">
                 <CardTitle className="text-base">{selected}</CardTitle>
                 <div className="flex gap-2">
                   <ExportButton properties={properties} label="Export" />
-                  <Button variant="ghost" size="icon" onClick={() => setSelected(null)} className="lg:hidden">
+                  <Button variant="ghost" size="icon" onClick={() => { setSelected(null); setSelectedProperty(null); }} className="lg:hidden">
                     <X className="h-4 w-4" />
                   </Button>
                 </div>
@@ -92,7 +106,11 @@ export default function ManagementPage() {
                 ) : (
                   <div className="space-y-1 max-h-96 overflow-y-auto">
                     {properties.map((p) => (
-                      <div key={p.id} className="flex items-center justify-between py-2 text-sm border-b last:border-0">
+                      <button
+                        key={p.id}
+                        onClick={() => setSelectedProperty(p)}
+                        className={`w-full flex items-center justify-between py-2 px-2 text-sm border-b last:border-0 text-left rounded-lg transition-colors hover:bg-accent/50 ${selectedProperty?.id === p.id ? 'bg-accent ring-1 ring-primary' : ''}`}
+                      >
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5">
                             <p className="font-medium truncate">{p.name}</p>
@@ -105,12 +123,27 @@ export default function ManagementPage() {
                           {p.avg_rent > 0 && <span className="text-xs">{fmtCurrency(p.avg_rent)}</span>}
                           <StatusBadge status={p.status} />
                         </div>
-                      </div>
+                      </button>
                     ))}
                   </div>
                 )}
               </CardContent>
             </Card>
+          </div>
+        )}
+
+        {/* Property Detail Panel */}
+        {selectedProperty && (
+          <div className="w-full lg:w-1/3">
+            <PropertyDetailPanel
+              property={selectedProperty}
+              onClose={() => setSelectedProperty(null)}
+              onSelectProperty={(p) => setSelectedProperty(p)}
+              isFavorite={favoriteIds.has(selectedProperty.id)}
+              onToggleFav={() => toggleFav(selectedProperty.id)}
+              onAddToPipeline={() => addToPipeline(selectedProperty.id)}
+              disableCompanyLink={true}
+            />
           </div>
         )}
       </div>

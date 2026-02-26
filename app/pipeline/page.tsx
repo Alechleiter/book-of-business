@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import { usePipeline } from '@/lib/hooks/use-pipeline';
+import { useFavorites } from '@/lib/hooks/use-favorites';
+import { PropertyDetailPanel } from '@/components/shared/property-detail-panel';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { StageBadge, StatusBadge } from '@/components/shared/status-badge';
@@ -10,6 +12,8 @@ import { PIPELINE_STAGES } from '@/lib/constants';
 import { TrendingUp, Trash2 } from 'lucide-react';
 import { AbbrCustom } from '@/components/shared/abbr';
 import { ContactQuality } from '@/components/shared/contact-quality';
+import type { PipelineItem } from '@/types/database';
+import type { Property } from '@/types/database';
 
 const STAGE_TOOLTIPS: Record<string, string> = {
   prospect: 'Initial identification — property identified as a potential lead',
@@ -22,7 +26,9 @@ const STAGE_TOOLTIPS: Record<string, string> = {
 
 export default function PipelinePage() {
   const [stageFilter, setStageFilter] = useState('');
+  const [selected, setSelected] = useState<PipelineItem | null>(null);
   const { items, loading, updateStage, removeFromPipeline } = usePipeline(stageFilter);
+  const { favoriteIds, toggle: toggleFav } = useFavorites();
 
   return (
     <div className="space-y-4">
@@ -49,50 +55,88 @@ export default function PipelinePage() {
           <p className="text-xs text-muted-foreground mt-1">Add properties to your pipeline from the Properties page</p>
         </div>
       ) : (
-        <div className="space-y-2">
-          {items.map((item) => {
-            const p = item.properties;
-            if (!p) return null;
-            return (
-              <Card key={item.id}>
-                <CardContent className="p-4">
-                  <div className="flex items-start justify-between">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="text-sm font-semibold truncate">{p.name}</h3>
-                        <ContactQuality property={p} />
-                        <StageBadge stage={item.stage} />
-                        <StatusBadge status={p.status} />
+        <div className="flex gap-6 relative items-start">
+          <div className={`space-y-2 ${selected ? 'w-1/2 hidden lg:block' : 'w-full'}`}>
+            {items.map((item) => {
+              const p = item.properties;
+              if (!p) return null;
+              return (
+                <Card
+                  key={item.id}
+                  className={`cursor-pointer transition-colors hover:bg-accent/50 ${selected?.id === item.id ? 'ring-2 ring-primary' : ''}`}
+                  onClick={() => setSelected(item)}
+                >
+                  <CardContent className="p-4">
+                    <div className="flex items-start justify-between">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h3 className="text-sm font-semibold truncate">{p.name}</h3>
+                          <ContactQuality property={p} />
+                          <StageBadge stage={item.stage} />
+                          <StatusBadge status={p.status} />
+                        </div>
+                        <p className="text-xs text-muted-foreground truncate">{p.address}, {p.city} {p.zip}</p>
+                        <div className="flex gap-x-4 mt-1 text-xs text-muted-foreground">
+                          <span>{p.units} units</span>
+                          {p.avg_rent > 0 && <span>{fmtCurrency(p.avg_rent)}/mo</span>}
+                          {p.management_company && <span>{p.management_company}</span>}
+                        </div>
                       </div>
-                      <p className="text-xs text-muted-foreground truncate">{p.address}, {p.city} {p.zip}</p>
-                      <div className="flex gap-x-4 mt-1 text-xs text-muted-foreground">
-                        <span>{p.units} units</span>
-                        {p.avg_rent > 0 && <span>{fmtCurrency(p.avg_rent)}/mo</span>}
-                        {p.management_company && <span>{p.management_company}</span>}
-                      </div>
-                    </div>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 flex-shrink-0" onClick={() => removeFromPipeline(p.id)}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  {/* Stage selector */}
-                  <div className="flex gap-1.5 mt-3 flex-wrap">
-                    {PIPELINE_STAGES.map((s) => (
                       <Button
-                        key={s.value}
-                        variant={item.stage === s.value ? 'default' : 'outline'}
-                        size="sm"
-                        className="text-[10px] h-6 px-2"
-                        onClick={() => updateStage(p.id, s.value)}
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-red-500 flex-shrink-0"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeFromPipeline(p.id);
+                          if (selected?.id === item.id) setSelected(null);
+                        }}
                       >
-                        {s.label}
+                        <Trash2 className="h-4 w-4" />
                       </Button>
-                    ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+          {selected && selected.properties && (
+            <div className="w-full lg:w-1/2 lg:sticky lg:top-4">
+              <PropertyDetailPanel
+                property={selected.properties}
+                onClose={() => setSelected(null)}
+                onSelectProperty={(p: Property) => {
+                  const pipelineItem = items.find(i => i.properties?.id === p.id);
+                  if (pipelineItem) setSelected(pipelineItem);
+                  else setSelected({ ...selected, properties: p });
+                }}
+                isFavorite={favoriteIds.has(selected.properties.id)}
+                onToggleFav={() => toggleFav(selected.properties!.id)}
+                onAddToPipeline={() => {}}
+                headerSlot={
+                  <div className="space-y-2">
+                    <h4 className="text-xs font-semibold text-muted-foreground">Pipeline Stage</h4>
+                    <div className="flex gap-1.5 flex-wrap">
+                      {PIPELINE_STAGES.map((s) => (
+                        <Button
+                          key={s.value}
+                          variant={selected.stage === s.value ? 'default' : 'outline'}
+                          size="sm"
+                          className="text-[10px] h-6 px-2"
+                          onClick={() => {
+                            updateStage(selected.properties!.id, s.value);
+                            setSelected({ ...selected, stage: s.value });
+                          }}
+                        >
+                          {s.label}
+                        </Button>
+                      ))}
+                    </div>
                   </div>
-                </CardContent>
-              </Card>
-            );
-          })}
+                }
+              />
+            </div>
+          )}
         </div>
       )}
     </div>
