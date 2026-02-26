@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState } from 'react';
 import { useProperties } from '@/lib/hooks/use-properties';
 import { useFavorites } from '@/lib/hooks/use-favorites';
 import { usePipeline } from '@/lib/hooks/use-pipeline';
@@ -29,23 +29,6 @@ export default function PropertiesPage() {
 
   const totalPages = Math.ceil(count / 50);
 
-  // Refs for scroll alignment
-  const listContainerRef = useRef<HTMLDivElement>(null);
-  const detailRef = useRef<HTMLDivElement>(null);
-  const cardRefs = useRef<Map<number, HTMLDivElement>>(new Map());
-
-  // When a property is selected, scroll the detail panel to align with the clicked card
-  useEffect(() => {
-    if (!selected || !detailRef.current || !listContainerRef.current) return;
-    const cardEl = cardRefs.current.get(selected.id);
-    if (!cardEl) return;
-
-    const listRect = listContainerRef.current.getBoundingClientRect();
-    const cardRect = cardEl.getBoundingClientRect();
-    const offsetFromList = cardRect.top - listRect.top;
-
-    detailRef.current.style.marginTop = `${Math.max(0, offsetFromList)}px`;
-  }, [selected]);
 
   const handleSelect = (p: Property) => {
     setSelected(p);
@@ -158,7 +141,7 @@ export default function PropertiesPage() {
 
       {/* Property List + Detail */}
       <div className="flex gap-6 relative items-start">
-        <div ref={listContainerRef} className={`space-y-2 ${selected ? 'w-1/2 hidden lg:block' : 'w-full'}`}>
+        <div className={`space-y-2 ${selected ? 'w-1/2 hidden lg:block' : 'w-full'}`}>
           {loading ? (
             <div className="flex items-center justify-center h-32">
               <div className="animate-spin h-6 w-6 border-2 border-primary border-t-transparent rounded-full" />
@@ -169,7 +152,6 @@ export default function PropertiesPage() {
             properties.map((p) => (
               <Card
                 key={p.id}
-                ref={(el) => { if (el) cardRefs.current.set(p.id, el); }}
                 className={`cursor-pointer transition-colors hover:bg-accent/50 ${selected?.id === p.id ? 'ring-2 ring-primary' : ''}`}
                 onClick={() => handleSelect(p)}
               >
@@ -204,7 +186,7 @@ export default function PropertiesPage() {
 
         {/* Detail Panel */}
         {selected && (
-          <div ref={detailRef} className="w-full lg:w-1/2 lg:sticky lg:top-4 transition-[margin] duration-200">
+          <div className="w-full lg:w-1/2 lg:sticky lg:top-4">
             <PropertyDetailPanel
               property={selected}
               onClose={() => setSelected(null)}
