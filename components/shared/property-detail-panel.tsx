@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -53,6 +53,14 @@ export function PropertyDetailPanel({
   disableCompanyLink = false,
 }: PropertyDetailPanelProps) {
   const [relatedView, setRelatedView] = useState<RelatedView>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll detail panel into view when property changes
+  useEffect(() => {
+    if (panelRef.current) {
+      panelRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [p.id]);
 
   const handleRelatedSelect = (selected: Property) => {
     onSelectProperty(selected);
@@ -60,7 +68,7 @@ export function PropertyDetailPanel({
   };
 
   return (
-    <Card>
+    <Card ref={panelRef}>
       <CardContent className="p-5 space-y-5 max-h-[85vh] overflow-y-auto">
         {/* Related Properties Panel */}
         {relatedView ? (
