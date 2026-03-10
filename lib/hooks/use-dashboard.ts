@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { getSupabase } from '@/lib/supabase/client';
+import type { Property } from '@/types/database';
 
 interface DashboardStats {
   totalProperties: number;
@@ -162,4 +163,58 @@ export function useDashboard() {
   }, []);
 
   return { stats, loading };
+}
+
+/* ─── Housing-type → SQL keyword mapping ─── */
+const HOUSING_TYPE_SEARCH: Record<string, string[]> = {
+  'Conventional': ['%conventional%'],
+  'Section 8 / Affordable': ['%section 8%'],
+  'Tax Credit': ['%tax credit%'],
+  'Senior Housing': ['%senior%'],
+  'Student Housing': ['%student%'],
+  'BTR/SFR': ['%btr%', '%sfr%'],
+  'Mixed Use': ['%mixed use%'],
+  'Income Restricted': ['%income restricted%'],
+  'Corporate Housing': ['%corporate%'],
+};
+
+/** Fetch all properties belonging to a parsed housing-type category. */
+export function useHousingTypeProperties(category: string | null) {
+  const [properties, setProperties] = useState<Property[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!category) { setProperties([]); return; }
+    setLoading(true);
+    const sb = getSupabase();
+    let q = sb.from('properties').select('*');
+
+    if (category === 'Unknown') {
+      q = q.is('housing_type', null);
+    } else {
+      const patterns = HOUSING_TYPE_SEARCH[category];
+      if (patterns) {
+        if (patterns.length === 1) {
+          q = q.ilike('housing_type', patterns[0]);
+        } else {
+          q = q.or(patterns.map((p) => `housing_type.ilike.${p}`).join(','));
+        }
+      } else {
+        // 'Other' — has a value but matches no known keyword
+        q = q.not('housing_type', 'is', null);
+        for (const pats of Object.values(HOUSING_TYPE_SEARCH)) {
+          for (const p of pats) {
+            q = q.not('housing_type', 'ilike', p);
+          }
+        }
+      }
+    }
+
+    q.order('units', { ascending: false }).then(({ data, error }) => {
+      if (!error && data) setProperties(data as Property[]);
+      setLoading(false);
+    });
+  }, [category]);
+
+  return { properties, loading };
 }
