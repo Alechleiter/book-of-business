@@ -140,13 +140,14 @@ function HousingTypeExpansion({ category, onSelectProperty, selectedPropertyId }
   onSelectProperty: (p: Property) => void;
   selectedPropertyId: number | null;
 }) {
-  const { properties, loading } = useHousingTypeProperties(category);
+  const { properties: allProperties, loading } = useHousingTypeProperties(category);
+  const [mgmtFilter, setMgmtFilter] = useState<string | null>(null);
 
   if (loading) return <div className="p-4 text-center text-sm text-muted-foreground">Loading...</div>;
 
   // Build management company breakdown from fetched properties
   const mgmtMap: Record<string, { units: number; properties: number }> = {};
-  for (const p of properties) {
+  for (const p of allProperties) {
     const mc = p.management_company || 'Unknown';
     if (!mgmtMap[mc]) mgmtMap[mc] = { units: 0, properties: 0 };
     mgmtMap[mc].units += p.units || 0;
@@ -156,6 +157,10 @@ function HousingTypeExpansion({ category, onSelectProperty, selectedPropertyId }
     .map(([name, v]) => ({ name, ...v }))
     .sort((a, b) => b.units - a.units);
 
+  const properties = mgmtFilter
+    ? allProperties.filter((p) => (p.management_company || 'Unknown') === mgmtFilter)
+    : allProperties;
+
   return (
     <div className="border-t mt-3 pt-4 space-y-4">
       {/* Management Company Breakdown */}
@@ -164,10 +169,16 @@ function HousingTypeExpansion({ category, onSelectProperty, selectedPropertyId }
           <h4 className="text-xs font-semibold text-muted-foreground mb-2">Management Companies</h4>
           <div className="space-y-1">
             {mgmtBreakdown.slice(0, 10).map((b) => (
-              <div key={b.name} className="flex items-center justify-between text-sm">
-                <span className="truncate">{b.name}</span>
+              <button
+                key={b.name}
+                className={`w-full flex items-center justify-between text-sm rounded-md px-2 py-1 text-left transition-colors hover:bg-accent/50 ${
+                  mgmtFilter === b.name ? 'bg-accent ring-1 ring-primary' : ''
+                }`}
+                onClick={() => setMgmtFilter(mgmtFilter === b.name ? null : b.name)}
+              >
+                <span className="truncate text-primary hover:underline">{b.name}</span>
                 <span className="text-xs text-muted-foreground flex-shrink-0 ml-2">{fmt(b.units)} units / {fmt(b.properties)} props</span>
-              </div>
+              </button>
             ))}
           </div>
         </div>
@@ -175,7 +186,14 @@ function HousingTypeExpansion({ category, onSelectProperty, selectedPropertyId }
 
       {/* Properties List */}
       <div className="flex items-center justify-between">
-        <h4 className="text-xs font-semibold text-muted-foreground">Properties ({properties.length})</h4>
+        <div className="flex items-center gap-2">
+          <h4 className="text-xs font-semibold text-muted-foreground">Properties ({properties.length})</h4>
+          {mgmtFilter && (
+            <button className="text-[10px] text-primary hover:underline" onClick={() => setMgmtFilter(null)}>
+              Clear filter
+            </button>
+          )}
+        </div>
         <ExportButton properties={properties} label="Export" />
       </div>
 

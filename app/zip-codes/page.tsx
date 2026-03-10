@@ -161,10 +161,15 @@ function ZipExpansion({ zip, onSelectProperty, selectedPropertyId, housingTypeFi
 }) {
   const { properties: allProperties, loading } = useZipProperties(zip);
   const breakdown = useZipMgmtBreakdown(zip);
+  const [mgmtFilter, setMgmtFilter] = useState<string | null>(null);
 
-  const properties = housingTypeFilter
+  let properties = housingTypeFilter
     ? allProperties.filter((p) => p.housing_type === housingTypeFilter)
     : allProperties;
+
+  if (mgmtFilter) {
+    properties = properties.filter((p) => p.management_company === mgmtFilter);
+  }
 
   if (loading) return <div className="p-4 text-center text-sm text-muted-foreground">Loading...</div>;
 
@@ -175,17 +180,30 @@ function ZipExpansion({ zip, onSelectProperty, selectedPropertyId, housingTypeFi
           <h4 className="text-xs font-semibold text-muted-foreground mb-2">Management Companies</h4>
           <div className="space-y-1">
             {breakdown.slice(0, 10).map((b) => (
-              <div key={b.management_company} className="flex items-center justify-between text-sm">
-                <span className="truncate">{b.management_company}</span>
+              <button
+                key={b.management_company}
+                className={`w-full flex items-center justify-between text-sm rounded-md px-2 py-1 text-left transition-colors hover:bg-accent/50 ${
+                  mgmtFilter === b.management_company ? 'bg-accent ring-1 ring-primary' : ''
+                }`}
+                onClick={() => setMgmtFilter(mgmtFilter === b.management_company ? null : b.management_company)}
+              >
+                <span className="truncate text-primary hover:underline">{b.management_company}</span>
                 <span className="text-xs text-muted-foreground flex-shrink-0 ml-2">{fmt(b.unit_count)} units / {fmt(b.property_count)} props</span>
-              </div>
+              </button>
             ))}
           </div>
         </div>
       )}
 
       <div className="flex items-center justify-between">
-        <h4 className="text-xs font-semibold text-muted-foreground">Properties ({properties.length})</h4>
+        <div className="flex items-center gap-2">
+          <h4 className="text-xs font-semibold text-muted-foreground">Properties ({properties.length})</h4>
+          {mgmtFilter && (
+            <button className="text-[10px] text-primary hover:underline" onClick={() => setMgmtFilter(null)}>
+              Clear filter
+            </button>
+          )}
+        </div>
         <ExportButton properties={properties} label="Export ZIP" />
       </div>
 
