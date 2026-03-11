@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useZipCodes, useZipProperties, useZipMgmtBreakdown } from '@/lib/hooks/use-zip-codes';
+import { useCompanyProperties } from '@/lib/hooks/use-related-properties';
 import { useFavorites } from '@/lib/hooks/use-favorites';
 import { usePipeline } from '@/lib/hooks/use-pipeline';
 import { Input } from '@/components/ui/input';
@@ -13,7 +14,7 @@ import { PropertyDetailPanel } from '@/components/shared/property-detail-panel';
 import { ExportButton } from '@/components/shared/export-button';
 import { fmt, fmtCurrency, fmtPercent } from '@/lib/format';
 import { MARKETS, HOUSING_TYPES } from '@/lib/constants';
-import { Search, ChevronDown, ChevronUp, MapPin, Phone, Mail } from 'lucide-react';
+import { Search, ChevronDown, ChevronUp, MapPin, Phone, Mail, Building2, ArrowLeft } from 'lucide-react';
 import { AbbrCustom } from '@/components/shared/abbr';
 import { ContactQuality } from '@/components/shared/contact-quality';
 import type { ZipAggregate, Property } from '@/types/database';
@@ -162,6 +163,7 @@ function ZipExpansion({ zip, onSelectProperty, selectedPropertyId, housingTypeFi
   const { properties: allProperties, loading } = useZipProperties(zip);
   const breakdown = useZipMgmtBreakdown(zip);
   const [mgmtFilter, setMgmtFilter] = useState<string | null>(null);
+  const [showAllSites, setShowAllSites] = useState<string | null>(null);
 
   let properties = housingTypeFilter
     ? allProperties.filter((p) => p.housing_type === housingTypeFilter)
@@ -173,6 +175,19 @@ function ZipExpansion({ zip, onSelectProperty, selectedPropertyId, housingTypeFi
 
   if (loading) return <div className="p-4 text-center text-sm text-muted-foreground">Loading...</div>;
 
+  // "See all sites" view — shows ALL properties for a company across all ZIPs
+  if (showAllSites) {
+    return (
+      <AllCompanySites
+        company={showAllSites}
+        zip={zip}
+        onBack={() => setShowAllSites(null)}
+        onSelectProperty={onSelectProperty}
+        selectedPropertyId={selectedPropertyId}
+      />
+    );
+  }
+
   return (
     <div className="border-t p-4 space-y-4">
       {breakdown.length > 0 && (
@@ -180,16 +195,28 @@ function ZipExpansion({ zip, onSelectProperty, selectedPropertyId, housingTypeFi
           <h4 className="text-xs font-semibold text-muted-foreground mb-2">Management Companies</h4>
           <div className="space-y-1">
             {breakdown.slice(0, 10).map((b) => (
-              <button
-                key={b.management_company}
-                className={`w-full flex items-center justify-between text-sm rounded-md px-2 py-1 text-left transition-colors hover:bg-accent/50 ${
-                  mgmtFilter === b.management_company ? 'bg-accent ring-1 ring-primary' : ''
-                }`}
-                onClick={() => setMgmtFilter(mgmtFilter === b.management_company ? null : b.management_company)}
-              >
-                <span className="truncate text-primary hover:underline">{b.management_company}</span>
-                <span className="text-xs text-muted-foreground flex-shrink-0 ml-2">{fmt(b.unit_count)} units / {fmt(b.property_count)} props</span>
-              </button>
+              <div key={b.management_company}>
+                <button
+                  className={`w-full flex items-center justify-between text-sm rounded-md px-2 py-1 text-left transition-colors hover:bg-accent/50 ${
+                    mgmtFilter === b.management_company ? 'bg-accent ring-1 ring-primary' : ''
+                  }`}
+                  onClick={() => setMgmtFilter(mgmtFilter === b.management_company ? null : b.management_company)}
+                >
+                  <span className="truncate text-primary hover:underline flex items-center gap-1.5">
+                    <Building2 className="h-3 w-3 flex-shrink-0" />
+                    {b.management_company}
+                  </span>
+                  <span className="text-xs text-muted-foreground flex-shrink-0 ml-2">{fmt(b.unit_count)} units / {fmt(b.property_count)} props</span>
+                </button>
+                {mgmtFilter === b.management_company && (
+                  <button
+                    className="ml-7 mt-1 text-[11px] text-primary hover:underline flex items-center gap-1"
+                    onClick={() => setShowAllSites(b.management_company)}
+                  >
+                    See all {b.management_company} sites →
+                  </button>
+                )}
+              </div>
             ))}
           </div>
         </div>
@@ -207,35 +234,82 @@ function ZipExpansion({ zip, onSelectProperty, selectedPropertyId, housingTypeFi
         <ExportButton properties={properties} label="Export ZIP" />
       </div>
 
-      <div className="space-y-1 max-h-80 overflow-y-auto">
-        {properties.map((p) => (
-          <button
-            key={p.id}
-            className={`w-full flex items-center justify-between text-sm py-2 px-3 rounded-lg text-left transition-colors hover:bg-accent/50 ${
-              selectedPropertyId === p.id ? 'bg-accent ring-1 ring-primary' : ''
-            }`}
-            onClick={() => onSelectProperty(p)}
-          >
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <span className="font-medium truncate">{p.name}</span>
-                <ContactQuality property={p} />
-                {p.phone && <Phone className="h-3 w-3 text-green-500 flex-shrink-0" />}
-                {p.email && <Mail className="h-3 w-3 text-blue-500 flex-shrink-0" />}
-              </div>
-              <span className="text-xs text-muted-foreground block truncate">{p.address}, {p.city}</span>
-              <div className="flex gap-x-3 text-xs text-muted-foreground mt-0.5">
-                <span>{p.units} units</span>
-                {p.avg_rent > 0 && <span>{fmtCurrency(p.avg_rent)}</span>}
-                {p.management_company && <span className="truncate max-w-[150px]">{p.management_company}</span>}
-              </div>
-            </div>
-            <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-              <StatusBadge status={p.status} />
-            </div>
-          </button>
-        ))}
+      <PropertyList properties={properties} onSelectProperty={onSelectProperty} selectedPropertyId={selectedPropertyId} />
+    </div>
+  );
+}
+
+/** Shows ALL properties for a management company (across all ZIPs) */
+function AllCompanySites({ company, zip, onBack, onSelectProperty, selectedPropertyId }: {
+  company: string;
+  zip: string;
+  onBack: () => void;
+  onSelectProperty: (p: Property) => void;
+  selectedPropertyId: number | null;
+}) {
+  const { properties, loading } = useCompanyProperties(company);
+
+  return (
+    <div className="border-t p-4 space-y-4">
+      <div className="flex items-center gap-2">
+        <button className="text-primary hover:underline flex items-center gap-1 text-sm" onClick={onBack}>
+          <ArrowLeft className="h-3.5 w-3.5" /> Back to {zip}
+        </button>
       </div>
+      <div className="flex items-center gap-2">
+        <Building2 className="h-4 w-4 text-primary" />
+        <h4 className="text-sm font-semibold">{company}</h4>
+      </div>
+      {loading ? (
+        <div className="p-4 text-center text-sm text-muted-foreground">Loading all sites...</div>
+      ) : (
+        <>
+          <div className="flex items-center justify-between">
+            <h4 className="text-xs font-semibold text-muted-foreground">All Properties ({properties.length})</h4>
+            <ExportButton properties={properties} label="Export Company" />
+          </div>
+          <PropertyList properties={properties} onSelectProperty={onSelectProperty} selectedPropertyId={selectedPropertyId} />
+        </>
+      )}
+    </div>
+  );
+}
+
+/** Shared scrollable property list used by both zip and company views */
+function PropertyList({ properties, onSelectProperty, selectedPropertyId }: {
+  properties: Property[];
+  onSelectProperty: (p: Property) => void;
+  selectedPropertyId: number | null;
+}) {
+  return (
+    <div className="space-y-1 max-h-80 overflow-y-auto">
+      {properties.map((p) => (
+        <button
+          key={p.id}
+          className={`w-full flex items-center justify-between text-sm py-2 px-3 rounded-lg text-left transition-colors hover:bg-accent/50 ${
+            selectedPropertyId === p.id ? 'bg-accent ring-1 ring-primary' : ''
+          }`}
+          onClick={() => onSelectProperty(p)}
+        >
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <span className="font-medium truncate">{p.name}</span>
+              <ContactQuality property={p} />
+              {p.phone && <Phone className="h-3 w-3 text-green-500 flex-shrink-0" />}
+              {p.email && <Mail className="h-3 w-3 text-blue-500 flex-shrink-0" />}
+            </div>
+            <span className="text-xs text-muted-foreground block truncate">{p.address}, {p.city} {p.zip}</span>
+            <div className="flex gap-x-3 text-xs text-muted-foreground mt-0.5">
+              <span>{p.units} units</span>
+              {p.avg_rent > 0 && <span>{fmtCurrency(p.avg_rent)}</span>}
+              {p.management_company && <span className="truncate max-w-[150px]">{p.management_company}</span>}
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+            <StatusBadge status={p.status} />
+          </div>
+        </button>
+      ))}
     </div>
   );
 }

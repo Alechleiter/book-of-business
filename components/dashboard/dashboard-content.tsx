@@ -6,7 +6,7 @@ import type { DashboardStats } from '@/lib/dashboard-data';
 import type { Property } from '@/types/database';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { fmt, fmtCurrency, fmtPercent } from '@/lib/format';
-import { Building2, Home, DollarSign, Activity, Percent, ChevronDown, ChevronUp, Phone, Mail } from 'lucide-react';
+import { Building2, Home, DollarSign, Activity, Percent, ChevronDown, ChevronUp, Phone, Mail, ArrowLeft } from 'lucide-react';
 import { Abbr, AbbrCustom } from '@/components/shared/abbr';
 import { StatusBadge } from '@/components/shared/status-badge';
 import { ContactQuality } from '@/components/shared/contact-quality';
@@ -15,6 +15,7 @@ import { ExportButton } from '@/components/shared/export-button';
 import { useFavorites } from '@/lib/hooks/use-favorites';
 import { usePipeline } from '@/lib/hooks/use-pipeline';
 import { useHousingTypeProperties } from '@/lib/hooks/use-dashboard';
+import { useCompanyProperties } from '@/lib/hooks/use-related-properties';
 
 const ChartsSection = dynamic(() => import('@/components/dashboard/charts-section'), {
   loading: () => (
@@ -142,6 +143,7 @@ function HousingTypeExpansion({ category, onSelectProperty, selectedPropertyId }
 }) {
   const { properties: allProperties, loading } = useHousingTypeProperties(category);
   const [mgmtFilter, setMgmtFilter] = useState<string | null>(null);
+  const [showAllSites, setShowAllSites] = useState<string | null>(null);
 
   if (loading) return <div className="p-4 text-center text-sm text-muted-foreground">Loading...</div>;
 
@@ -161,6 +163,19 @@ function HousingTypeExpansion({ category, onSelectProperty, selectedPropertyId }
     ? allProperties.filter((p) => (p.management_company || 'Unknown') === mgmtFilter)
     : allProperties;
 
+  // "See all sites" view — shows ALL properties for a company
+  if (showAllSites) {
+    return (
+      <DashboardAllCompanySites
+        company={showAllSites}
+        category={category}
+        onBack={() => setShowAllSites(null)}
+        onSelectProperty={onSelectProperty}
+        selectedPropertyId={selectedPropertyId}
+      />
+    );
+  }
+
   return (
     <div className="border-t mt-3 pt-4 space-y-4">
       {/* Management Company Breakdown */}
@@ -169,16 +184,28 @@ function HousingTypeExpansion({ category, onSelectProperty, selectedPropertyId }
           <h4 className="text-xs font-semibold text-muted-foreground mb-2">Management Companies</h4>
           <div className="space-y-1">
             {mgmtBreakdown.slice(0, 10).map((b) => (
-              <button
-                key={b.name}
-                className={`w-full flex items-center justify-between text-sm rounded-md px-2 py-1 text-left transition-colors hover:bg-accent/50 ${
-                  mgmtFilter === b.name ? 'bg-accent ring-1 ring-primary' : ''
-                }`}
-                onClick={() => setMgmtFilter(mgmtFilter === b.name ? null : b.name)}
-              >
-                <span className="truncate text-primary hover:underline">{b.name}</span>
-                <span className="text-xs text-muted-foreground flex-shrink-0 ml-2">{fmt(b.units)} units / {fmt(b.properties)} props</span>
-              </button>
+              <div key={b.name}>
+                <button
+                  className={`w-full flex items-center justify-between text-sm rounded-md px-2 py-1 text-left transition-colors hover:bg-accent/50 ${
+                    mgmtFilter === b.name ? 'bg-accent ring-1 ring-primary' : ''
+                  }`}
+                  onClick={() => setMgmtFilter(mgmtFilter === b.name ? null : b.name)}
+                >
+                  <span className="truncate text-primary hover:underline flex items-center gap-1.5">
+                    <Building2 className="h-3 w-3 flex-shrink-0" />
+                    {b.name}
+                  </span>
+                  <span className="text-xs text-muted-foreground flex-shrink-0 ml-2">{fmt(b.units)} units / {fmt(b.properties)} props</span>
+                </button>
+                {mgmtFilter === b.name && (
+                  <button
+                    className="ml-7 mt-1 text-[11px] text-primary hover:underline flex items-center gap-1"
+                    onClick={() => setShowAllSites(b.name)}
+                  >
+                    See all {b.name} sites →
+                  </button>
+                )}
+              </div>
             ))}
           </div>
         </div>
@@ -197,35 +224,82 @@ function HousingTypeExpansion({ category, onSelectProperty, selectedPropertyId }
         <ExportButton properties={properties} label="Export" />
       </div>
 
-      <div className="space-y-1 max-h-80 overflow-y-auto">
-        {properties.map((p) => (
-          <button
-            key={p.id}
-            className={`w-full flex items-center justify-between text-sm py-2 px-3 rounded-lg text-left transition-colors hover:bg-accent/50 ${
-              selectedPropertyId === p.id ? 'bg-accent ring-1 ring-primary' : ''
-            }`}
-            onClick={() => onSelectProperty(p)}
-          >
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <span className="font-medium truncate">{p.name}</span>
-                <ContactQuality property={p} />
-                {p.phone && <Phone className="h-3 w-3 text-green-500 flex-shrink-0" />}
-                {p.email && <Mail className="h-3 w-3 text-blue-500 flex-shrink-0" />}
-              </div>
-              <span className="text-xs text-muted-foreground block truncate">{p.address}, {p.city}</span>
-              <div className="flex gap-x-3 text-xs text-muted-foreground mt-0.5">
-                <span>{p.units} units</span>
-                {p.avg_rent > 0 && <span>{fmtCurrency(p.avg_rent)}</span>}
-                {p.management_company && <span className="truncate max-w-[150px]">{p.management_company}</span>}
-              </div>
-            </div>
-            <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-              <StatusBadge status={p.status} />
-            </div>
-          </button>
-        ))}
+      <DashboardPropertyList properties={properties} onSelectProperty={onSelectProperty} selectedPropertyId={selectedPropertyId} />
+    </div>
+  );
+}
+
+/** Shows ALL properties for a management company (from dashboard housing type view) */
+function DashboardAllCompanySites({ company, category, onBack, onSelectProperty, selectedPropertyId }: {
+  company: string;
+  category: string;
+  onBack: () => void;
+  onSelectProperty: (p: Property) => void;
+  selectedPropertyId: number | null;
+}) {
+  const { properties, loading } = useCompanyProperties(company);
+
+  return (
+    <div className="border-t mt-3 pt-4 space-y-4">
+      <div className="flex items-center gap-2">
+        <button className="text-primary hover:underline flex items-center gap-1 text-sm" onClick={onBack}>
+          <ArrowLeft className="h-3.5 w-3.5" /> Back to {category}
+        </button>
       </div>
+      <div className="flex items-center gap-2">
+        <Building2 className="h-4 w-4 text-primary" />
+        <h4 className="text-sm font-semibold">{company}</h4>
+      </div>
+      {loading ? (
+        <div className="p-4 text-center text-sm text-muted-foreground">Loading all sites...</div>
+      ) : (
+        <>
+          <div className="flex items-center justify-between">
+            <h4 className="text-xs font-semibold text-muted-foreground">All Properties ({properties.length})</h4>
+            <ExportButton properties={properties} label="Export Company" />
+          </div>
+          <DashboardPropertyList properties={properties} onSelectProperty={onSelectProperty} selectedPropertyId={selectedPropertyId} />
+        </>
+      )}
+    </div>
+  );
+}
+
+/** Shared scrollable property list for dashboard expansions */
+function DashboardPropertyList({ properties, onSelectProperty, selectedPropertyId }: {
+  properties: Property[];
+  onSelectProperty: (p: Property) => void;
+  selectedPropertyId: number | null;
+}) {
+  return (
+    <div className="space-y-1 max-h-80 overflow-y-auto">
+      {properties.map((p) => (
+        <button
+          key={p.id}
+          className={`w-full flex items-center justify-between text-sm py-2 px-3 rounded-lg text-left transition-colors hover:bg-accent/50 ${
+            selectedPropertyId === p.id ? 'bg-accent ring-1 ring-primary' : ''
+          }`}
+          onClick={() => onSelectProperty(p)}
+        >
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <span className="font-medium truncate">{p.name}</span>
+              <ContactQuality property={p} />
+              {p.phone && <Phone className="h-3 w-3 text-green-500 flex-shrink-0" />}
+              {p.email && <Mail className="h-3 w-3 text-blue-500 flex-shrink-0" />}
+            </div>
+            <span className="text-xs text-muted-foreground block truncate">{p.address}, {p.city} {p.zip}</span>
+            <div className="flex gap-x-3 text-xs text-muted-foreground mt-0.5">
+              <span>{p.units} units</span>
+              {p.avg_rent > 0 && <span>{fmtCurrency(p.avg_rent)}</span>}
+              {p.management_company && <span className="truncate max-w-[150px]">{p.management_company}</span>}
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+            <StatusBadge status={p.status} />
+          </div>
+        </button>
+      ))}
     </div>
   );
 }
