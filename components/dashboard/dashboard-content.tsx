@@ -229,6 +229,33 @@ function HousingTypeExpansion({ category, onSelectProperty, selectedPropertyId }
   );
 }
 
+/* Client-side category matching (mirrors server-side categorizeHousingType) */
+const CATEGORY_KEYWORDS: Record<string, string[]> = {
+  'Conventional': ['conventional'],
+  'Section 8 / Affordable': ['section 8'],
+  'Tax Credit': ['tax credit'],
+  'Senior Housing': ['senior'],
+  'Student Housing': ['student'],
+  'BTR/SFR': ['btr', 'sfr'],
+  'Mixed Use': ['mixed use'],
+  'Income Restricted': ['income restricted'],
+  'Corporate Housing': ['corporate'],
+};
+
+function matchesCategory(housingType: string | null, category: string): boolean {
+  if (category === 'Unknown') return !housingType;
+  const keywords = CATEGORY_KEYWORDS[category];
+  if (!keywords) {
+    // "Other" — has a value but matches no known keyword
+    if (!housingType) return false;
+    const lower = housingType.toLowerCase();
+    return !Object.values(CATEGORY_KEYWORDS).some((kws) => kws.some((kw) => lower.includes(kw)));
+  }
+  if (!housingType) return false;
+  const lower = housingType.toLowerCase();
+  return keywords.some((kw) => lower.includes(kw));
+}
+
 /** Shows ALL properties for a management company (from dashboard housing type view) */
 function DashboardAllCompanySites({ company, category, onBack, onSelectProperty, selectedPropertyId }: {
   company: string;
@@ -237,7 +264,14 @@ function DashboardAllCompanySites({ company, category, onBack, onSelectProperty,
   onSelectProperty: (p: Property) => void;
   selectedPropertyId: number | null;
 }) {
-  const { properties, loading } = useCompanyProperties(company);
+  const { properties: allProperties, loading } = useCompanyProperties(company);
+  const [filterCategory, setFilterCategory] = useState(false);
+
+  const properties = filterCategory
+    ? allProperties.filter((p) => matchesCategory(p.housing_type, category))
+    : allProperties;
+
+  const categoryCount = allProperties.filter((p) => matchesCategory(p.housing_type, category)).length;
 
   return (
     <div className="border-t mt-3 pt-4 space-y-4">
@@ -250,12 +284,31 @@ function DashboardAllCompanySites({ company, category, onBack, onSelectProperty,
         <Building2 className="h-4 w-4 text-primary" />
         <h4 className="text-sm font-semibold">{company}</h4>
       </div>
+      {/* Filter toggle */}
+      {!loading && categoryCount < allProperties.length && (
+        <div className="flex gap-2">
+          <button
+            className={`text-xs px-3 py-1 rounded-full border transition-colors ${!filterCategory ? 'bg-primary text-primary-foreground border-primary' : 'hover:bg-accent/50'}`}
+            onClick={() => setFilterCategory(false)}
+          >
+            All sites ({allProperties.length})
+          </button>
+          <button
+            className={`text-xs px-3 py-1 rounded-full border transition-colors ${filterCategory ? 'bg-primary text-primary-foreground border-primary' : 'hover:bg-accent/50'}`}
+            onClick={() => setFilterCategory(true)}
+          >
+            {category} only ({categoryCount})
+          </button>
+        </div>
+      )}
       {loading ? (
         <div className="p-4 text-center text-sm text-muted-foreground">Loading all sites...</div>
       ) : (
         <>
           <div className="flex items-center justify-between">
-            <h4 className="text-xs font-semibold text-muted-foreground">All Properties ({properties.length})</h4>
+            <h4 className="text-xs font-semibold text-muted-foreground">
+              {filterCategory ? `${category} Properties` : 'All Properties'} ({properties.length})
+            </h4>
             <ExportButton properties={properties} label="Export Company" />
           </div>
           <DashboardPropertyList properties={properties} onSelectProperty={onSelectProperty} selectedPropertyId={selectedPropertyId} />

@@ -247,7 +247,14 @@ function AllCompanySites({ company, zip, onBack, onSelectProperty, selectedPrope
   onSelectProperty: (p: Property) => void;
   selectedPropertyId: number | null;
 }) {
-  const { properties, loading } = useCompanyProperties(company);
+  const { properties: allProperties, loading } = useCompanyProperties(company);
+  const [filterZip, setFilterZip] = useState(false);
+
+  const properties = filterZip
+    ? allProperties.filter((p) => p.zip === zip)
+    : allProperties;
+
+  const zipCount = allProperties.filter((p) => p.zip === zip).length;
 
   return (
     <div className="border-t p-4 space-y-4">
@@ -260,12 +267,31 @@ function AllCompanySites({ company, zip, onBack, onSelectProperty, selectedPrope
         <Building2 className="h-4 w-4 text-primary" />
         <h4 className="text-sm font-semibold">{company}</h4>
       </div>
+      {/* Filter toggle */}
+      {!loading && zipCount < allProperties.length && (
+        <div className="flex gap-2">
+          <button
+            className={`text-xs px-3 py-1 rounded-full border transition-colors ${!filterZip ? 'bg-primary text-primary-foreground border-primary' : 'hover:bg-accent/50'}`}
+            onClick={() => setFilterZip(false)}
+          >
+            All sites ({allProperties.length})
+          </button>
+          <button
+            className={`text-xs px-3 py-1 rounded-full border transition-colors ${filterZip ? 'bg-primary text-primary-foreground border-primary' : 'hover:bg-accent/50'}`}
+            onClick={() => setFilterZip(true)}
+          >
+            {zip} only ({zipCount})
+          </button>
+        </div>
+      )}
       {loading ? (
         <div className="p-4 text-center text-sm text-muted-foreground">Loading all sites...</div>
       ) : (
         <>
           <div className="flex items-center justify-between">
-            <h4 className="text-xs font-semibold text-muted-foreground">All Properties ({properties.length})</h4>
+            <h4 className="text-xs font-semibold text-muted-foreground">
+              {filterZip ? `${zip} Properties` : 'All Properties'} ({properties.length})
+            </h4>
             <ExportButton properties={properties} label="Export Company" />
           </div>
           <PropertyList properties={properties} onSelectProperty={onSelectProperty} selectedPropertyId={selectedPropertyId} />
