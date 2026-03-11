@@ -249,12 +249,21 @@ function AllCompanySites({ company, zip, onBack, onSelectProperty, selectedPrope
 }) {
   const { properties: allProperties, loading } = useCompanyProperties(company);
   const [filterZip, setFilterZip] = useState(false);
+  const [cityFilter, setCityFilter] = useState('');
+  const [countyFilter, setCountyFilter] = useState('');
 
-  const properties = filterZip
-    ? allProperties.filter((p) => p.zip === zip)
-    : allProperties;
-
+  // Build available cities/counties from loaded data
+  const cities = [...new Set(allProperties.map((p) => p.city).filter(Boolean))].sort() as string[];
+  const counties = [...new Set(allProperties.map((p) => p.county).filter(Boolean))].sort() as string[];
   const zipCount = allProperties.filter((p) => p.zip === zip).length;
+
+  // Apply all active filters
+  let properties = allProperties;
+  if (filterZip) properties = properties.filter((p) => p.zip === zip);
+  if (cityFilter) properties = properties.filter((p) => p.city === cityFilter);
+  if (countyFilter) properties = properties.filter((p) => p.county === countyFilter);
+
+  const activeFilterCount = (filterZip ? 1 : 0) + (cityFilter ? 1 : 0) + (countyFilter ? 1 : 0);
 
   return (
     <div className="border-t p-4 space-y-4">
@@ -267,21 +276,45 @@ function AllCompanySites({ company, zip, onBack, onSelectProperty, selectedPrope
         <Building2 className="h-4 w-4 text-primary" />
         <h4 className="text-sm font-semibold">{company}</h4>
       </div>
-      {/* Filter toggle */}
-      {!loading && zipCount < allProperties.length && (
-        <div className="flex gap-2">
-          <button
-            className={`text-xs px-3 py-1 rounded-full border transition-colors ${!filterZip ? 'bg-primary text-primary-foreground border-primary' : 'hover:bg-accent/50'}`}
-            onClick={() => setFilterZip(false)}
-          >
-            All sites ({allProperties.length})
-          </button>
-          <button
-            className={`text-xs px-3 py-1 rounded-full border transition-colors ${filterZip ? 'bg-primary text-primary-foreground border-primary' : 'hover:bg-accent/50'}`}
-            onClick={() => setFilterZip(true)}
-          >
-            {zip} only ({zipCount})
-          </button>
+      {/* Filters */}
+      {!loading && (
+        <div className="flex flex-wrap gap-2 items-center">
+          {zipCount < allProperties.length && (
+            <button
+              className={`text-xs px-3 py-1 rounded-full border transition-colors ${filterZip ? 'bg-primary text-primary-foreground border-primary' : 'hover:bg-accent/50'}`}
+              onClick={() => setFilterZip(!filterZip)}
+            >
+              {zip} only ({zipCount})
+            </button>
+          )}
+          {cities.length > 1 && (
+            <select
+              className="text-xs h-7 rounded-full border bg-background px-2"
+              value={cityFilter}
+              onChange={(e) => setCityFilter(e.target.value)}
+            >
+              <option value="">All cities</option>
+              {cities.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          )}
+          {counties.length > 1 && (
+            <select
+              className="text-xs h-7 rounded-full border bg-background px-2"
+              value={countyFilter}
+              onChange={(e) => setCountyFilter(e.target.value)}
+            >
+              <option value="">All counties</option>
+              {counties.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          )}
+          {activeFilterCount > 0 && (
+            <button
+              className="text-[10px] text-primary hover:underline"
+              onClick={() => { setFilterZip(false); setCityFilter(''); setCountyFilter(''); }}
+            >
+              Clear all
+            </button>
+          )}
         </div>
       )}
       {loading ? (
@@ -290,7 +323,7 @@ function AllCompanySites({ company, zip, onBack, onSelectProperty, selectedPrope
         <>
           <div className="flex items-center justify-between">
             <h4 className="text-xs font-semibold text-muted-foreground">
-              {filterZip ? `${zip} Properties` : 'All Properties'} ({properties.length})
+              {activeFilterCount > 0 ? 'Filtered' : 'All'} Properties ({properties.length})
             </h4>
             <ExportButton properties={properties} label="Export Company" />
           </div>

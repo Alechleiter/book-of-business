@@ -266,12 +266,21 @@ function DashboardAllCompanySites({ company, category, onBack, onSelectProperty,
 }) {
   const { properties: allProperties, loading } = useCompanyProperties(company);
   const [filterCategory, setFilterCategory] = useState(false);
+  const [cityFilter, setCityFilter] = useState('');
+  const [countyFilter, setCountyFilter] = useState('');
 
-  const properties = filterCategory
-    ? allProperties.filter((p) => matchesCategory(p.housing_type, category))
-    : allProperties;
-
+  // Build available cities/counties from loaded data
+  const cities = [...new Set(allProperties.map((p) => p.city).filter(Boolean))].sort() as string[];
+  const counties = [...new Set(allProperties.map((p) => p.county).filter(Boolean))].sort() as string[];
   const categoryCount = allProperties.filter((p) => matchesCategory(p.housing_type, category)).length;
+
+  // Apply all active filters
+  let properties = allProperties;
+  if (filterCategory) properties = properties.filter((p) => matchesCategory(p.housing_type, category));
+  if (cityFilter) properties = properties.filter((p) => p.city === cityFilter);
+  if (countyFilter) properties = properties.filter((p) => p.county === countyFilter);
+
+  const activeFilterCount = (filterCategory ? 1 : 0) + (cityFilter ? 1 : 0) + (countyFilter ? 1 : 0);
 
   return (
     <div className="border-t mt-3 pt-4 space-y-4">
@@ -284,21 +293,45 @@ function DashboardAllCompanySites({ company, category, onBack, onSelectProperty,
         <Building2 className="h-4 w-4 text-primary" />
         <h4 className="text-sm font-semibold">{company}</h4>
       </div>
-      {/* Filter toggle */}
-      {!loading && categoryCount < allProperties.length && (
-        <div className="flex gap-2">
-          <button
-            className={`text-xs px-3 py-1 rounded-full border transition-colors ${!filterCategory ? 'bg-primary text-primary-foreground border-primary' : 'hover:bg-accent/50'}`}
-            onClick={() => setFilterCategory(false)}
-          >
-            All sites ({allProperties.length})
-          </button>
-          <button
-            className={`text-xs px-3 py-1 rounded-full border transition-colors ${filterCategory ? 'bg-primary text-primary-foreground border-primary' : 'hover:bg-accent/50'}`}
-            onClick={() => setFilterCategory(true)}
-          >
-            {category} only ({categoryCount})
-          </button>
+      {/* Filters */}
+      {!loading && (
+        <div className="flex flex-wrap gap-2 items-center">
+          {categoryCount < allProperties.length && (
+            <button
+              className={`text-xs px-3 py-1 rounded-full border transition-colors ${filterCategory ? 'bg-primary text-primary-foreground border-primary' : 'hover:bg-accent/50'}`}
+              onClick={() => setFilterCategory(!filterCategory)}
+            >
+              {category} only ({categoryCount})
+            </button>
+          )}
+          {cities.length > 1 && (
+            <select
+              className="text-xs h-7 rounded-full border bg-background px-2"
+              value={cityFilter}
+              onChange={(e) => setCityFilter(e.target.value)}
+            >
+              <option value="">All cities</option>
+              {cities.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          )}
+          {counties.length > 1 && (
+            <select
+              className="text-xs h-7 rounded-full border bg-background px-2"
+              value={countyFilter}
+              onChange={(e) => setCountyFilter(e.target.value)}
+            >
+              <option value="">All counties</option>
+              {counties.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          )}
+          {activeFilterCount > 0 && (
+            <button
+              className="text-[10px] text-primary hover:underline"
+              onClick={() => { setFilterCategory(false); setCityFilter(''); setCountyFilter(''); }}
+            >
+              Clear all
+            </button>
+          )}
         </div>
       )}
       {loading ? (
@@ -307,7 +340,7 @@ function DashboardAllCompanySites({ company, category, onBack, onSelectProperty,
         <>
           <div className="flex items-center justify-between">
             <h4 className="text-xs font-semibold text-muted-foreground">
-              {filterCategory ? `${category} Properties` : 'All Properties'} ({properties.length})
+              {activeFilterCount > 0 ? 'Filtered' : 'All'} Properties ({properties.length})
             </h4>
             <ExportButton properties={properties} label="Export Company" />
           </div>
