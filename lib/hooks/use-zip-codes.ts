@@ -14,7 +14,13 @@ export function useZipCodes(search = '', market = '', sort = 'total_units') {
     let q = sb.from('zip_aggregates').select('*');
 
     if (search) {
-      q = q.or(`zip.ilike.%${search}%,city.ilike.%${search}%`);
+      if (search.includes(',')) {
+        // Comma-separated ZIP codes — exact match on each
+        const zips = search.split(',').map((s) => s.trim()).filter(Boolean);
+        if (zips.length > 0) q = q.in('zip', zips);
+      } else {
+        q = q.or(`zip.ilike.%${search}%,city.ilike.%${search}%`);
+      }
     }
     if (market) q = q.eq('market', market);
 

@@ -46,7 +46,7 @@ export default function ZipCodesPage() {
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input className="pl-9" placeholder="Search by ZIP or city..." value={search} onChange={(e) => setSearch(e.target.value)} />
+          <Input className="pl-9" placeholder="Search by ZIP or city (comma-separate for multiple ZIPs)..." value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
         <select className="h-9 rounded-md border bg-background px-3 text-sm" value={market} onChange={(e) => setMarket(e.target.value)}>
           <option value="">All Markets</option>
