@@ -10,11 +10,13 @@ import {
   Briefcase,
   Star,
   TrendingUp,
+  Layers,
 } from 'lucide-react';
 
 export const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/zip-codes', label: 'Zip Codes', icon: MapPin },
+  { href: '/bulk-zip-codes', label: 'Bulk ZIPs', icon: Layers },
   { href: '/properties', label: 'Properties', icon: Building2 },
   { href: '/management', label: 'Management', icon: Briefcase },
   { href: '/favorites', label: 'Saved', icon: Star },
