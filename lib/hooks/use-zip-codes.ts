@@ -11,26 +11,30 @@ export function useZipCodes(search = '', market = '', sort = 'total_units') {
   const fetch = useCallback(async () => {
     setLoading(true);
     const sb = getSupabase();
+    const hasComma = search.includes(',');
     let q = sb.from('zip_aggregates').select('*');
 
-    if (search) {
-      if (search.includes(',')) {
-        // Comma-separated terms — match each against zip or city
-        const terms = search.split(',').map((s) => s.trim()).filter(Boolean);
-        if (terms.length > 0) {
-          q = q.or(terms.map((t) => `zip.ilike.%${t}%,city.ilike.%${t}%`).join(','));
-        }
-      } else {
-        q = q.or(`zip.ilike.%${search}%,city.ilike.%${search}%`);
-      }
+    // Single-term search: filter server-side
+    if (search && !hasComma) {
+      q = q.or(`zip.ilike.%${search}%,city.ilike.%${search}%`);
     }
     if (market) q = q.eq('market', market);
 
     const ascending = sort === 'zip' || sort === 'city';
-    q = q.order(sort, { ascending }).limit(200);
+    q = q.order(sort, { ascending }).limit(hasComma ? 5000 : 200);
 
     const { data } = await q;
-    setZips(data || []);
+    let result = data || [];
+
+    // Comma-separated: filter client-side so we avoid PostgREST encoding issues
+    if (hasComma) {
+      const terms = search.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
+      result = result.filter((z) =>
+        terms.some((t) => z.zip.toLowerCase().includes(t) || (z.city || '').toLowerCase().includes(t))
+      );
+    }
+
+    setZips(result);
     setLoading(false);
   }, [search, market, sort]);
 
