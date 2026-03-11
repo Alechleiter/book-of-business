@@ -11,30 +11,49 @@ export function useZipCodes(search = '', market = '', sort = 'total_units') {
   const fetch = useCallback(async () => {
     setLoading(true);
     const sb = getSupabase();
-    const hasComma = search.includes(',');
-    let q = sb.from('zip_aggregates').select('*');
 
-    // Single-term search: filter server-side
-    if (search && !hasComma) {
-      q = q.or(`zip.ilike.%${search}%,city.ilike.%${search}%`);
-    }
-    if (market) q = q.eq('market', market);
+    if (search.includes(',')) {
+      // Comma-separated: run one query per term, then merge & dedupe
+      const terms = search.split(',').map((s) => s.trim()).filter(Boolean);
+      const all: ZipAggregate[] = [];
 
-    const ascending = sort === 'zip' || sort === 'city';
-    q = q.order(sort, { ascending }).limit(hasComma ? 5000 : 200);
-
-    const { data } = await q;
-    let result = data || [];
-
-    // Comma-separated: filter client-side so we avoid PostgREST encoding issues
-    if (hasComma) {
-      const terms = search.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
-      result = result.filter((z) =>
-        terms.some((t) => z.zip.toLowerCase().includes(t) || (z.city || '').toLowerCase().includes(t))
+      await Promise.all(
+        terms.map(async (term) => {
+          let q = sb.from('zip_aggregates').select('*')
+            .or(`zip.ilike.%${term}%,city.ilike.%${term}%`);
+          if (market) q = q.eq('market', market);
+          const { data } = await q.limit(50);
+          if (data) all.push(...data);
+        })
       );
+
+      // Deduplicate by zip
+      const seen = new Set<string>();
+      const deduped = all.filter((z) => {
+        if (seen.has(z.zip)) return false;
+        seen.add(z.zip);
+        return true;
+      });
+
+      // Sort
+      const asc = sort === 'zip' || sort === 'city';
+      deduped.sort((a, b) => {
+        const av = (a as any)[sort] ?? 0;
+        const bv = (b as any)[sort] ?? 0;
+        return asc ? (av > bv ? 1 : -1) : (bv > av ? 1 : -1);
+      });
+
+      setZips(deduped);
+    } else {
+      let q = sb.from('zip_aggregates').select('*');
+      if (search) q = q.or(`zip.ilike.%${search}%,city.ilike.%${search}%`);
+      if (market) q = q.eq('market', market);
+      const asc = sort === 'zip' || sort === 'city';
+      q = q.order(sort, { ascending: asc }).limit(200);
+      const { data } = await q;
+      setZips(data || []);
     }
 
-    setZips(result);
     setLoading(false);
   }, [search, market, sort]);
 
