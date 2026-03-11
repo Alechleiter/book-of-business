@@ -15,9 +15,11 @@ export function useZipCodes(search = '', market = '', sort = 'total_units') {
 
     if (search) {
       if (search.includes(',')) {
-        // Comma-separated ZIP codes — exact match on each
-        const zips = search.split(',').map((s) => s.trim()).filter(Boolean);
-        if (zips.length > 0) q = q.in('zip', zips);
+        // Comma-separated terms — match each against zip or city
+        const terms = search.split(',').map((s) => s.trim()).filter(Boolean);
+        if (terms.length > 0) {
+          q = q.or(terms.map((t) => `zip.ilike.%${t}%,city.ilike.%${t}%`).join(','));
+        }
       } else {
         q = q.or(`zip.ilike.%${search}%,city.ilike.%${search}%`);
       }
